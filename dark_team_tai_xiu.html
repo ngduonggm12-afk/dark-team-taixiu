@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DARK TEAM - Tài Xỉu</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#07090d;color:#fff;font-family:Arial,sans-serif}
+.wrap{max-width:900px;margin:auto;padding:18px}.card{background:#11151c;border:1px solid #292f3a;border-radius:18px;padding:18px;margin:14px 0;box-shadow:0 8px 25px #0005}
+h1{text-align:center;margin:5px 0;font-size:28px}.sub{text-align:center;color:#9ca3af;margin-bottom:20px}
+.row{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.box{background:#0b0e13;border-radius:14px;padding:15px;text-align:center}
+.label{color:#9ca3af;font-size:13px}.value{font-size:27px;font-weight:800;margin-top:7px}
+.tai{color:#38bdf8}.xiu{color:#c084fc}.ok{color:#4ade80}.warn{color:#fbbf24}
+button,input{width:100%;padding:12px;border-radius:10px;border:1px solid #343b48;background:#0b0e13;color:#fff}
+button{background:#2563eb;border:0;font-weight:bold;cursor:pointer;margin-top:8px}
+button.red{background:#dc2626}.status{margin-top:10px;font-size:13px;color:#9ca3af;word-break:break-word}
+table{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}th,td{padding:9px;border-bottom:1px solid #252b35;text-align:center}
+.note{color:#9ca3af;font-size:12px;line-height:1.5}
+@media(max-width:600px){.row{grid-template-columns:1fr 1fr}.value{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🌑 DARK TEAM</h1>
+<div class="sub">TÀI XỈU • TỰ ĐỘNG PHÂN TÍCH API</div>
+
+<div class="card">
+<div class="label">API đang sử dụng</div>
+<input id="api" value="https://amongst-plots-called-dining.trycloudflare.com/api/tx">
+<button id="get">⚡ LẤY KẾT QUẢ NGAY</button>
+<button id="auto">🔄 TỰ ĐỘNG: BẬT</button>
+<button id="clear" class="red">🗑 XÓA LỊCH SỬ</button>
+<div id="status" class="status">Đang kết nối API...</div>
+</div>
+
+<div class="card">
+<div class="row">
+<div class="box"><div class="label">PHIÊN</div><div id="phien" class="value">—</div></div>
+<div class="box"><div class="label">KẾT QUẢ</div><div id="ketqua" class="value">—</div></div>
+<div class="box"><div class="label">XÚC XẮC</div><div id="dice" class="value">—</div></div>
+<div class="box"><div class="label">TỔNG</div><div id="tong" class="value">—</div></div>
+</div>
+</div>
+
+<div class="card">
+<h3>🔮 PHÂN TÍCH PHIÊN TIẾP THEO</h3>
+<div id="prediction" class="value">Đang thu thập...</div>
+<div id="reason" class="status"></div>
+</div>
+
+<div class="card">
+<div class="row">
+<div class="box"><div class="label">TÀI</div><div id="tai" class="value">0%</div></div>
+<div class="box"><div class="label">XỈU</div><div id="xiu" class="value">0%</div></div>
+<div class="box"><div class="label">TỔNG PHIÊN</div><div id="count" class="value">0</div></div>
+<div class="box"><div class="label">CHUỖI</div><div id="streak" class="value">—</div></div>
+</div>
+</div>
+
+<div class="card">
+<h3>📋 LỊCH SỬ</h3>
+<table><thead><tr><th>Phiên</th><th>Kết quả</th><th>Xúc xắc</th><th>Tổng</th></tr></thead>
+<tbody id="history"></tbody></table>
+</div>
+
+<div class="card note">
+<b>Lưu ý:</b> Đây là công cụ phân tích thống kê từ dữ liệu API, không đảm bảo dự đoán đúng kết quả tương lai. Nếu trò chơi dùng xúc xắc ngẫu nhiên độc lập, lịch sử không tạo ra lợi thế chắc chắn.
+</div>
+</div>
+
+<script>
+const API_KEY="dark_team_api_v4";
+const DATA_KEY="dark_team_history_v4";
+let data=JSON.parse(localStorage.getItem(DATA_KEY)||"[]");
+let auto=true,timer=null;
+
+const $=id=>document.getElementById(id);
+function clean(v){return String(v??"").toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").trim()}
+function getResult(r,dice){
+ let k=clean(r.ket_qua);
+ if(k.includes("tai")) return "Tài";
+ if(k.includes("xiu")) return "Xỉu";
+ if(dice.length===3) return dice.reduce((a,b)=>a+b,0)>=11?"Tài":"Xỉu";
+ return "";
+}
+function parse(raw){
+ let r=raw;
+ if(r&&r.data&&typeof r.data==="object") r=r.data;
+ if(Array.isArray(r)) r=r[0]||{};
+ const dice=[Number(r.xuc_xac_1),Number(r.xuc_xac_2),Number(r.xuc_xac_3)];
+ const valid=dice.every(Number.isFinite);
+ const result=getResult(r,valid?dice:[]);
+ if(!result) throw Error("Không đọc được kết quả từ API");
+ return {
+  id:String(r.phien??""),
+  result:result,
+  dice:valid?dice:[],
+  total:Number.isFinite(Number(r.tong))?Number(r.tong):(valid?dice.reduce((a,b)=>a+b,0):""),
+  time:r.thoi_gian||""
+ };
+}
+function add(x){
+ if(!x.id||data.some(a=>String(a.id)===String(x.id))) return false;
+ data.unshift(x);data=data.slice(0,300);localStorage.setItem(DATA_KEY,JSON.stringify(data));return true;
+}
+function render(x){
+ if(x){
+  $("phien").textContent=x.id||"—";
+  $("ketqua").textContent=x.result;
+  $("ketqua").className="value "+(x.result==="Tài"?"tai":"xiu");
+  $("dice").textContent=x.dice.length?x.dice.join(" - "):"—";
+  $("tong").textContent=x.total||"—";
+ }
+ const n=data.length,t=data.filter(x=>x.result==="Tài").length,xx=n-t;
+ $("tai").textContent=n?(t/n*100).toFixed(1)+"%":"0%";
+ $("xiu").textContent=n?(xx/n*100).toFixed(1)+"%":"0%";
+ $("count").textContent=n;
+ if(n){let r=data[0].result,k=0;while(k<n&&data[k].result===r)k++;$("streak").textContent=r+" × "+k;}
+ const recent=data.slice(0,50),rt=recent.filter(x=>x.result==="Tài").length,rx=recent.length-rt;
+ const pt=(rt+1)/(recent.length+2),px=(rx+1)/(recent.length+2);
+ if(recent.length<10||Math.abs(pt-px)<.04){
+   $("prediction").textContent="CHƯA CÓ LỢI THẾ RÕ";
+   $("prediction").className="value warn";
+ }else{
+   const pr=pt>px?"TÀI":"XỈU";
+   $("prediction").textContent=pr;
+   $("prediction").className="value "+(pr==="TÀI"?"tai":"xiu");
+ }
+ $("reason").textContent=`50 phiên gần nhất: Tài ${rt} • Xỉu ${rx}. Phân tích có làm trơn Laplace; không phải xác suất đảm bảo.`;
+ $("history").innerHTML=data.slice(0,50).map(x=>`<tr><td>${x.id}</td><td class="${x.result==="Tài"?"tai":"xiu"}">${x.result}</td><td>${x.dice.join("-")||"—"}</td><td>${x.total||"—"}</td></tr>`).join("");
+}
+async function fetchData(){
+ try{
+  const url=$("api").value.trim();
+  localStorage.setItem(API_KEY,url);
+  const res=await fetch(url,{cache:"no-store"});
+  if(!res.ok) throw Error("HTTP "+res.status);
+  const x=parse(await res.json());
+  const fresh=add(x);render(x);
+  $("status").innerHTML=fresh?`<span class="ok">● Đã nhận phiên ${x.id} • ${x.result} • ${x.dice.join("-")} • Tổng ${x.total}</span>`:`Đã kiểm tra phiên ${x.id} — phiên này đã có trong lịch sử.`;
+ }catch(e){
+  $("status").innerHTML=`<span class="warn">⚠ ${e.message}. Nếu chạy trên web mà bị CORS, API cần cho phép origin của website hoặc dùng proxy.</span>`;
+ }
+}
+function schedule(){clearInterval(timer);if(auto)timer=setInterval(fetchData,5000)}
+$("get").onclick=fetchData;
+$("auto").onclick=()=>{auto=!auto;$("auto").textContent="🔄 TỰ ĐỘNG: "+(auto?"BẬT":"TẮT");schedule()};
+$("clear").onclick=()=>{if(confirm("Xóa toàn bộ lịch sử?")){data=[];localStorage.removeItem(DATA_KEY);render(null)}};
+const saved=localStorage.getItem(API_KEY);if(saved)$("api").value=saved;
+render(data[0]);fetchData();schedule();
+</script>
+</body>
+</html>
